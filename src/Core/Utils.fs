@@ -163,21 +163,28 @@ module Array =
 module Markdown =
     open System.Text.RegularExpressions
     let private replacePatterns =
+        let paramPattern = @"(<param name=')(\w+?)('>(.*?)<\/param>)"
         let r pat = Regex(pat, RegexOptions.Compiled ||| RegexOptions.IgnoreCase)
-        [ r"<c>(((?!<c>)(?!<\/c>).)*)<\/c>", sprintf "`%s`" ]
+        [ r"<c>(((?!<c>)(?!<\/c>).)*)<\/c>", sprintf "`%s`";
+          r paramPattern, (fun s ->
+            let sub = @"*$2*: $4"
+            printf "Regex(%s).Replace(%s, %s)" paramPattern s sub
+            Regex(paramPattern).Replace(s, sub) ) ]
 
     let private removePatterns =
         [ "<summary>"; "</summary>"; "<para>"; "</para>" ]
 
     /// Replaces XML tags with Markdown equivalents.
     let replaceXml (str: string) : string =
+        printf "XML to replace: %s" str
         let res =
             replacePatterns
             |> List.fold (fun res (regex: Regex, formatter: string -> string) ->
                 // repeat replacing with same pattern to handle nested tags, like `<c>..<c>..</c>..</c>`
                 let rec loop res : string =
                     match regex.Match res with
-                    | m when m.Success -> loop <| res.Replace(m.Groups.[0].Value, formatter (m.Groups.[1].Value))
+                    | m when m.Success && m.Groups.Count > 4 -> formatter m.Groups.[0].Value
+                    | m when m.Success -> loop <| regex.Replace(m.Groups.[0].Value, formatter (m.Groups.[1].Value))
                     | _ -> res
                 loop res
             ) str
